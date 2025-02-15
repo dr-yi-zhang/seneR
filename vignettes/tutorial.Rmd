@@ -1,0 +1,60 @@
+---
+title: "tutorial"
+author: "dr-yi-zhang"
+date: "2024-12-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 1.2 Installation
+
+```{r,eval=FALSE}
+if (!requireNamespace("pacman", quietly = TRUE))
+    install.packages("pacman")
+library(pacman)
+pacman::p_load(c("GSEABase","GSVA"))
+
+```
+
+```{r}
+library(seneR)
+env_Load()
+```
+
+```{r}
+example_expr <- read.csv(system.file("demo", "GSE246425_counts.csv", package = "seneR"),row.names = 1)
+example_meta <- read.csv(system.file("demo", "GSE246425_meta.csv", package = "seneR"),row.names = 1)
+```
+
+```{r}
+SID_res <- SenCID(example_expr)
+```
+
+#GSVA计算
+
+```{r}
+gsva_res <- seneGSVA(example_expr)
+```
+
+#GSVA绘图
+
+```{r}
+merged_data <- rbind(gsva_res,t(SID_res$score_res))
+```
+
+```{r}
+plot_violin(merged_data,example_meta,'group')
+```
+
+单独组画图
+
+```{r}
+merged_data <- cbind(SID_res$score_res,example_meta)
+```
+
+```{r}
+plot_group(merged_data,'group','SID_Score',comparisons = list(c('Old','Young')))
+```
