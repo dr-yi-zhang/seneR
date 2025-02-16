@@ -15,8 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 if (!requireNamespace("pacman", quietly = TRUE))
     install.packages("pacman")
 library(pacman)
-pacman::p_load(c("GSEABase","GSVA"))
-
+pacman::p_load(GSEABase, GSVA, dplyr,tidyverse)
 ```
 
 ```{r}
