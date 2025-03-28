@@ -6,10 +6,11 @@
 \usage{
 plot_group(
   data,
+  meta,
   group,
   feature = "SID_Score",
-  comparisons = NULL,
-  map_signif_level = FALSE
+  method = "t.test",
+  comparisons = NULL
 )
 }
 \arguments{

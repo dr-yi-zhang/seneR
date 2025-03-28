@@ -9,8 +9,13 @@
 #' @export
 #'
 #' @examples
-plot_group <- function(data, group, feature = "SID_Score",  
+plot_group <- function(data, meta, group, feature = "SID_Score",  
                        method = "t.test", comparisons = NULL) {
+  data_table <- rownames_to_column(data, var = "Sample")
+  meta_table <- rownames_to_column(meta, var = "Sample")
+  plot_data <- data_table %>%
+    left_join(meta_table, by = "Sample")
+  
   # 转换为 symbol 类型
   group_sym <- sym(group)
   feature_sym <- sym(feature)
@@ -20,7 +25,7 @@ plot_group <- function(data, group, feature = "SID_Score",
   step_y <- (max_y - min(data[[feature]], na.rm = TRUE)) * 0.1
   
   # 初始化 ggplot 对象
-  p <- ggplot(data, aes(x = !!group_sym, y = !!feature_sym)) +
+  p <- ggplot(plot_data, aes(x = !!group_sym, y = !!feature_sym)) +
     stat_boxplot(geom = "errorbar", aes(color = !!group_sym), width = 0.2) +
     geom_boxplot(aes(color = !!group_sym), outlier.shape = NA) +
     geom_jitter(aes(color = !!group_sym), width = 0.1, size = 1) +
