@@ -107,7 +107,7 @@ Plot boxplots based on the grouping of Meta information:
 plot_group(score_res, example_meta, 'group','SID_Score',comparisons = list(c('Old','Young')))
 ```
 
-<img src="man/figures/README-unnamed-chunk-4-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-4-1.png" width="75%" />
 
 From the plot, we can see that the senescence level of the old group is
 significantly higher than that of the young group.
@@ -141,7 +141,7 @@ Plot violin plot based on the grouping of Meta information:
 plot_violin(gsva_res,example_meta,'group')
 ```
 
-<img src="man/figures/README-unnamed-chunk-6-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-6-1.png" width="75%" />
 
 From the figure, we can see that not all phenotypes are different
 between the two groups. Among them, the levels of NF-kB and SASP in the
@@ -192,31 +192,31 @@ Visualizing senescence assessment results
 VlnPlot(pbmc3k, features = "SID_Score", group.by = "seurat_annotations")
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-9-1.png" width="75%" />
 
 ``` r
 DimPlot(pbmc3k)
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-2.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-9-2.png" width="75%" />
 
 ``` r
 DimPlot(pbmc3k, group.by = "RecSID")
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-3.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-9-3.png" width="75%" />
 
 ``` r
 DimPlot(pbmc3k, group.by = "Binarization") #Visualizing senescent/non-senescent cells. 1 for senescent and 0 for non-senescent.
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-4.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-9-4.png" width="75%" />
 
 ``` r
 FeaturePlot(pbmc3k, features = "SID_Score")
 ```
 
-<img src="man/figures/README-unnamed-chunk-9-5.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-9-5.png" width="75%" />
 
 Plotting the trajectory of senescence
 
@@ -228,13 +228,13 @@ library(monocle)
 seneCDS <- sene_traject(pbmc3k,color = "SID_Score",cores = 7)
 ```
 
-<img src="man/figures/README-unnamed-chunk-10-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-10-1.png" width="75%" />
 
 ``` r
 seneCDS <- sene_traject(pbmc3k,color = "seurat_annotations",cores = 7) #Gain insights by observing annotated cell subpopulations on trajectories
 ```
 
-<img src="man/figures/README-unnamed-chunk-10-2.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-10-2.png" width="75%" />
 
 Finding genes that have a kinetic tendency associated with senescence by
 plotting a heat map
@@ -246,7 +246,7 @@ differentially expressed genes with SID score.
 sene_heatmap(seneCDS, num = 20, num_clusters = 3) #Set the number of genes to be displayed and the number of clustered expression patterns
 ```
 
-<img src="man/figures/README-unnamed-chunk-11-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-11-1.png" width="75%" />
 
 ## Feedback
 
