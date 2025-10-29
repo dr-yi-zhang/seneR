@@ -4,7 +4,7 @@
 \alias{env_Load}
 \title{Title}
 \usage{
-env_Load(libname, pkgname)
+env_Load(libname = NULL, pkgname = NULL)
 }
 \arguments{
 \item{libname}{}

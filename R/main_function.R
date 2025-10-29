@@ -1,27 +1,31 @@
-#' Title
-#'
-#' @param libname 
-#' @param pkgname 
-#'
-#' @return
+# seneR/R/env_Load.R
+
+#' @title Load seneR environment
+#' @description Initializes or checks the Python environment required by seneR.
+#' @return Invisible NULL.
 #' @export
-#'
-#' @examples
-env_Load <- function(libname, pkgname) {
-  # 检查虚拟环境是否存在，如果不存在则创建并安装依赖
-  if (!reticulate::virtualenv_exists("myenv")) {
-    print("Creating virtual environment 'myenv'...")
-    reticulate::virtualenv_create("myenv")
+# seneR/R/env_Load.R
+
+#' @title Load seneR environment
+#' @description Activates the reticulate environment (for local use).
+#' @return Invisible NULL.
+#' @export
+env_Load <- function() {
+  
+  # For deployment, this function does nothing as py_require() handles it.
+  # For local use, it ensures the virtualenv is used, which is good practice.
+  
+  if (reticulate::virtualenv_exists("seneR_env")) {
+    # If the env exists locally (as defined in your Rprofile), use it.
+    reticulate::use_virtualenv("seneR_env", required = TRUE)
+    print("Local 'seneR_env' activated.")
+  } else {
+    # If not running locally, this message confirms server is relying on py_require().
+    print("Environment setup relies on py_require() in app.R for remote deployment.")
   }
-  # 激活虚拟环境
-  print("Setting up virtual environment...")
-  reticulate::use_virtualenv("myenv", required = TRUE)
-
-  reticulate::virtualenv_install("myenv", packages = c("scikit-learn==1.5.0", "joblib",'NumPy==1.26.4'))
-  print("Virtual environment setup and dependencies installed.")
-
+  
+  return(invisible(NULL))
 }
-
 #' Title
 #'
 #' @param adata 
