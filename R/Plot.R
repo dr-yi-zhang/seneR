@@ -166,7 +166,6 @@ plot_violin <- function(expr,meta,group, adjust_fdr = TRUE, p_threshold = 0.05){
     size = 4
   )
   
-  return(p)
 }
 
 plot_heatmap <- function(gsva_result,meta){
