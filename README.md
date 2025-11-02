@@ -38,9 +38,6 @@ devtools::install_github("dr-yi-zhang/seneR")
 ``` r
 library(seneR)
 env_Load() 
-#> [1] "Setting up virtual environment..."
-#> Using virtual environment 'myenv' ...
-#> [1] "Virtual environment setup and dependencies installed."
 ```
 
 ### Input RNA-seq data
