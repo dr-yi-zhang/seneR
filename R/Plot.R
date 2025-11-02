@@ -155,7 +155,8 @@ plot_violin <- function(expr,meta,group, adjust_fdr = TRUE, p_threshold = 0.05){
       panel.border = element_rect(color = "black", fill = NA, size = 1),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(),
-      plot.caption = element_text(size = 10, hjust = 0.5)
+      plot.caption = element_text(size = 10, hjust = 0.5),
+      plot.margin = margin(10, 10, 10, 50)  # 增加底部边界
     )
   
   # 添加显著性标记
