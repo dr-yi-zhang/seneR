@@ -59,7 +59,7 @@ head(example_meta)
 
 The example dataset (GSE246425) is a bulk RNA-seq dataset of chondrocytes isolated and cultured from human cartilage, including young group (passage 1-3) and old group (serial passaging to passage 15-18).
 
-### Senescence level (SID score) assessment: 
+### Senescence level (SID score) assessment:
 
 The machine learning-based prediction model can automatically identify the senescence prediction model (SID1\~6) suitable for each input sample and calculate the senescence score (SID score).[@tao2024]
 
@@ -87,7 +87,7 @@ gsva_res <- seneGSVA(example_expr)
 Plot violin plot based on the grouping of Meta information:
 
 ```{r}
-plot_violin(gsva_res,example_meta,'group')
+plot_violin(gsva_res,example_meta,'group', adjust_fdr = TRUE, p_threshold = 0.05)
 ```
 
 From the figure, we can see that not all phenotypes are different between the two groups. Among them, the levels of NF-kB and SASP in the old group were significantly higher than those in the young group, which is consistent with the conclusions of previous osteoarthritis studies.

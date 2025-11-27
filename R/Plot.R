@@ -93,28 +93,80 @@ plot_cellratio <- function(group1,group2){
 #' @export
 #'
 #' @examples
-plot_violin <- function(expr,meta,group){
+plot_violin <- function(expr,meta,group, adjust_fdr = TRUE, p_threshold = 0.05){
   expr_long <- rownames_to_column(expr, var = "Feature") %>% 
     pivot_longer(cols = -Feature,names_to = "Sample", values_to = "Expression")
   meta_table <- rownames_to_column(meta, var = "Sample")
   plot_data <- expr_long %>%
     left_join(meta_table, by = "Sample")
+
+  # 计算每个特征的p值
+  p_values <- plot_data %>%
+    group_by(Feature) %>%
+    summarise(
+      p_value = t.test(Expression ~ !!sym(group))$p.value
+    )
+  # 根据是否进行FDR校正选择使用p值还是q值
+  if(adjust_fdr) {
+    p_values <- p_values %>%
+      mutate(
+        adjusted_p = p.adjust(p_value, method = "BH"),
+        significance = case_when(
+          adjusted_p < 0.001 ~ "***",
+          adjusted_p < 0.01 ~ "**",
+          adjusted_p < p_threshold ~ "*",
+          TRUE ~ "ns"
+        )
+      )
+    p_label <- "FDR-adjusted p-value"
+  } else {
+    p_values <- p_values %>%
+      mutate(
+        adjusted_p = p_value,
+        significance = case_when(
+          p_value < 0.001 ~ "***",
+          p_value < 0.01 ~ "**",
+          p_value < p_threshold ~ "*",
+          TRUE ~ "ns"
+        )
+      )
+    p_label <- "p-value"
+  }
+  
+  # 确定y轴最大值用于标注位置
+  y_max <- max(plot_data$Expression, na.rm = TRUE)
+  y_pos <- y_max + 0.1 * y_max  # 在最大值上方10%处标注
+  
   # 绘制分组小提琴图
-  ggplot(plot_data, aes(x = Feature, y = Expression, fill = !!sym(group))) +
+  p <- ggplot(plot_data, aes(x = Feature, y = Expression, fill = !!sym(group))) +
     geom_violin(trim = FALSE, position = position_dodge(width = 0.9)) +
     geom_vline(xintercept = seq(1.5, length(unique(plot_data$Feature)) - 0.5, 1), 
                linetype = "dashed", color = "gray", size = 0.5) +
     stat_summary(fun.data = mean_se, geom = "pointrange", 
                  position = position_dodge(width = 0.9), color = "black") +
     theme_minimal() +
-    labs(x = "Feature", y = "Expression")+ 
+    labs(
+      x = "Feature", 
+      y = "Expression",
+      caption = paste("Significance based on", p_label, "(threshold =", p_threshold, ")")
+    ) + 
     theme(
       axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 10),
-      panel.border = element_rect(color = "black", fill = NA, size = 1),  # 添加边框
-      panel.grid.major.x = element_blank(),  # 隐藏默认网格线
-      panel.grid.minor.x = element_blank()
-    )+
-    ggpubr::stat_compare_means(aes(group = !!sym(group)), method = "t.test", label = "p.signif") # 添加显著性标记
+      panel.border = element_rect(color = "black", fill = NA, size = 1),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      plot.caption = element_text(size = 10, hjust = 0.5),
+      plot.margin = margin(10, 10, 10, 50)  # 增加底部边界
+    )
+  
+  # 添加显著性标记
+  p + geom_text(
+    data = p_values,
+    aes(x = Feature, y = y_pos, label = significance),
+    inherit.aes = FALSE,
+    size = 4
+  )
+  
 }
 
 plot_heatmap <- function(gsva_result,meta){

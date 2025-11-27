@@ -10,11 +10,12 @@
 #' @description Activates the reticulate environment (for local use).
 #' @return Invisible NULL.
 #' @export
-env_Load <- function() {
+env_Load <- function(local=TRUE) {
   
   # For deployment, this function does nothing as py_require() handles it.
   # For local use, it ensures the virtualenv is used, which is good practice.
-  
+  if(local){reticulate::virtualenv_install("seneR_env", packages = c("scikit-learn==1.5.0", "joblib",'NumPy==1.26.4'))
+    }
   if (reticulate::virtualenv_exists("seneR_env")) {
     # If the env exists locally (as defined in your Rprofile), use it.
     reticulate::use_virtualenv("seneR_env", required = TRUE)

@@ -38,9 +38,7 @@ devtools::install_github("dr-yi-zhang/seneR")
 ``` r
 library(seneR)
 env_Load() 
-#> [1] "Setting up virtual environment..."
-#> Using virtual environment 'myenv' ...
-#> [1] "Virtual environment setup and dependencies installed."
+#> [1] "Environment setup relies on py_require() in app.R for remote deployment."
 ```
 
 ### Input RNA-seq data
@@ -122,7 +120,7 @@ through the GSVA algorithm.
 
 ``` r
 gsva_res <- seneGSVA(example_expr)
-#> ℹ GSVA version 2.0.5
+#> ℹ GSVA version 2.0.7
 #> ! 21175 genes with constant values throughout the samples
 #> ! Genes with constant values are discarded
 #> ℹ Calculating GSVA ranks
@@ -138,7 +136,21 @@ gsva_res <- seneGSVA(example_expr)
 Plot violin plot based on the grouping of Meta information:
 
 ``` r
-plot_violin(gsva_res,example_meta,'group')
+plot_violin(gsva_res,example_meta,'group', adjust_fdr = TRUE, p_threshold = 0.05)
+#> Warning: Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+#> ℹ Please use `linewidth` instead.
+#> ℹ The deprecated feature was likely used in the seneR package.
+#>   Please report the issue to the authors.
+#> This warning is displayed once every 8 hours.
+#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+#> generated.
+#> Warning: The `size` argument of `element_rect()` is deprecated as of ggplot2 3.4.0.
+#> ℹ Please use the `linewidth` argument instead.
+#> ℹ The deprecated feature was likely used in the seneR package.
+#>   Please report the issue to the authors.
+#> This warning is displayed once every 8 hours.
+#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+#> generated.
 ```
 
 <img src="man/figures/README-unnamed-chunk-6-1.png" width="75%" />
@@ -190,6 +202,28 @@ Visualizing senescence assessment results
 
 ``` r
 VlnPlot(pbmc3k, features = "SID_Score", group.by = "seurat_annotations")
+#> Warning: The `slot` argument of `FetchData()` is deprecated as of SeuratObject 5.0.0.
+#> ℹ Please use the `layer` argument instead.
+#> ℹ The deprecated feature was likely used in the Seurat package.
+#>   Please report the issue at <https://github.com/satijalab/seurat/issues>.
+#> This warning is displayed once every 8 hours.
+#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+#> generated.
+#> Warning: `PackageCheck()` was deprecated in SeuratObject 5.0.0.
+#> ℹ Please use `rlang::check_installed()` instead.
+#> ℹ The deprecated feature was likely used in the Seurat package.
+#>   Please report the issue at <https://github.com/satijalab/seurat/issues>.
+#> This warning is displayed once every 8 hours.
+#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+#> generated.
+#> Warning: `aes_string()` was deprecated in ggplot2 3.0.0.
+#> ℹ Please use tidy evaluation idioms with `aes()`.
+#> ℹ See also `vignette("ggplot2-in-packages")` for more information.
+#> ℹ The deprecated feature was likely used in the Seurat package.
+#>   Please report the issue at <https://github.com/satijalab/seurat/issues>.
+#> This warning is displayed once every 8 hours.
+#> Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+#> generated.
 ```
 
 <img src="man/figures/README-unnamed-chunk-9-1.png" width="75%" />
