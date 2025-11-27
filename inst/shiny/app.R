@@ -160,6 +160,47 @@ ui <- fluidPage(
   )
 )
 
+# DEFINE Pred_for_shiny HERE
+Pred_for_shiny <- function(cpm_zcol, sidnum, binarize = FALSE) {
+  df_test <- t(cpm_zcol)
+  rfeatures <- GetFeatures(sidnum)
+  x_test <- SplitLabel(as.data.frame(df_test), rfeatures)
+  
+  py$x_test <- as.matrix(x_test)
+  
+  py_run_string("
+model_decf = model.decision_function(x_test)
+Ltest_prob = model_L.predict_proba(x_test)
+model_pretest = model_L.predict(x_test)
+")
+  
+  model_decf <- py$model_decf
+  Ltest_prob <- py$Ltest_prob
+  model_pretest <- py$model_pretest
+  
+  #### 🔥 MEMORY RELEASE 🔥 ####
+  py$x_test <- NULL
+  py$model_decf <- NULL
+  py$Ltest_prob <- NULL
+  py$model_pretest <- NULL
+  gc()
+  py_run_string("import gc; gc.collect()")
+  
+  if (binarize) {
+    return(data.frame(
+      SID_Score = Ltest_prob[, 2],
+      Decision = model_decf,
+      Binarization = model_pretest
+    ))
+  } else {
+    return(data.frame(
+      SID_Score = Ltest_prob[, 2],
+      Decision = model_decf
+    ))
+  }
+}
+
+
 
 ############################################################
 # 5. SERVER
@@ -171,7 +212,7 @@ server <- function(input, output, session) {
     load_python_models()
   }, silent = TRUE)
   
-  Pred <- Pred_for_shiny
+  Pred <<- Pred_for_shiny
   
   output$log <- renderPrint(cat("Environment Ready.\n"))
   
