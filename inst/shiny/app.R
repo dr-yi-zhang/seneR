@@ -1,152 +1,257 @@
+###############################################
+# app.R (works BOTH locally and on shinyapps.io)
+###############################################
+
 library(shiny)
-library(reticulate) 
-# ... (other libraries) ...
-
-# CRITICAL: This tells shinyapps.io to provision a Python environment 
-# and install your required packages and versions.
-py_require(
-  packages = c("scikit-learn==1.5.0", "joblib", "NumPy==1.26.4"),
-  python_version = "3.10" # Use a compatible, standard version
-)
-
-# inst/shiny/app.R
-if (!requireNamespace("seneR", quietly = TRUE)) {
-  install.packages("seneR_0.0.0.9000.tar.gz", repos = NULL, type = "source")
-}
-library(seneR) # Your package
-library(Seurat)
-library(ggplot2)
 library(DT)
-library(SeuratData) # For the pbmc3k example
+library(ggplot2)
+library(Seurat)
+library(dplyr)
+library(tidyr)
+library(reticulate)
+library(seneR) 
 
-# ----------------- PYTHON CONFIGURATION (CRITICAL FOR DEPLOYMENT) ------------------
-# This block tells rsconnect what Python environment to create and packages to install.
-# It MUST be in the global scope of app.R (or global.R).
+options(shiny.maxRequestSize = 150 * 1024^2)   # Safe upload limit
+options(expressions = 5e5)                 # Prevent recursion issues
 
 
+############################################################
+# 0. DETECT ENVIRONMENT (LOCAL vs SHINYAPPS.IO)
+############################################################
+
+running_local <- !nzchar(Sys.getenv("SHINY_PORT"))
+if (running_local) {
+  message(">>> Running in LOCAL mode")
+} else {
+  message(">>> Running on shinyapps.io (DEPLOY mode)")
+}
+
+
+############################################################
+# 1. Python Environment Handling
+############################################################
+
+if (running_local) {
+  # LOCAL ONLY: Install Python dependencies if missing
+  message("Setting up Python environment locally...")
+
+  py_require(
+    packages = c(
+      "scikit-learn==1.5.0",
+      "joblib",
+      "numpy==1.26.4"
+    ),
+    python_version = "3.10"
+  )
+
+} else {
+  # DEPLOY MODE: shinyapps.io provides Python env from requirements.txt
+  message("Using shinyapps.io Python environment.")
+}
+
+use_python(Sys.getenv("RETICULATE_PYTHON"), required = FALSE)
+py_config()
+
+
+############################################################
+# 2. Load ALL Python Models ONCE (critical to prevent OOM)
+############################################################
+
+py_model_env <- new.env(parent = emptyenv())
+
+joblib_load <- function(path) {
+  py_run_string(sprintf("
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
+warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
+import joblib
+obj = joblib.load(r'%s')
+", path))
+  py$obj
+}
+
+load_python_models <- function() {
+  message("Loading Python models...")
+
+  base_path <- system.file("model", package = "seneR")
+
+  # Load SID models
+  for (i in 1:6) {
+    m  <- file.path(base_path, sprintf("SID%d.pkl", i))
+    ml <- file.path(base_path, sprintf("SID%d_L.pkl", i))
+
+    py_model_env[[paste0("model",  i)]]  <- joblib_load(m)
+    py_model_env[[paste0("modelL", i)]]  <- joblib_load(ml)
+  }
+
+  # Load recommendation model
+  rec_path <- file.path(base_path, "recommend_model.pkl")
+  py_model_env$recommender <- joblib_load(rec_path)
+
+  message("Python models loaded successfully.")
+}
+
+load_python_models()
+
+
+############################################################
+# 3. Helper to access pre-loaded Python models
+############################################################
+
+GetModels <- function(sidnum) {
+  list(
+    model = py_model_env[[paste0("model", sidnum)]],
+    model_L = py_model_env[[paste0("modelL", sidnum)]]
+  )
+}
+
+
+############################################################
+# 4. UI
+############################################################
 
 ui <- fluidPage(
+  
   titlePanel("seneR: Senescence Analysis Portal"),
+
   sidebarLayout(
     sidebarPanel(
-      actionButton("init_env", "Initialize seneR environment"),
       selectInput("mode", "Analysis mode:",
-                  choices = c("Bulk RNA-seq", "Single-cell (Seurat)")),
+                  c("Bulk RNA-seq", "Single-cell (Seurat)")),
+
       hr(),
-      
+
       conditionalPanel(
         condition = "input.mode == 'Bulk RNA-seq'",
         fileInput("expr_file", "Upload expression matrix (CSV)", accept = ".csv"),
         fileInput("meta_file", "Upload metadata (CSV)", accept = ".csv"),
-        checkboxInput("use_example", "Use example dataset (GSE246425)", TRUE),
-        actionButton("run_bulk", "Run bulk analysis")
+        checkboxInput("use_example", "Use demo dataset (GSE246425)", TRUE),
+        actionButton("run_bulk", "Run Bulk Analysis")
       ),
-      
+
       conditionalPanel(
         condition = "input.mode == 'Single-cell (Seurat)'",
-        fileInput("seurat_file", "Upload Seurat object (RDS)", accept = ".rds"),
-        checkboxInput("use_pbmc", "Use SeuratData PBMC3K sample", TRUE),
-        actionButton("run_seurat", "Run Seurat analysis")
+        fileInput("seurat_file", "Upload Seurat RDS", accept = ".rds"),
+        checkboxInput("use_pbmc", "Use small PBMC example", TRUE),
+        actionButton("run_seurat", "Run Seurat Analysis")
       )
     ),
-    
+
     mainPanel(
       tabsetPanel(
-        tabPanel("Summary / Messages", verbatimTextOutput("log")),
-        tabPanel("Results Table", DTOutput("result_table")),
-        tabPanel("Plot 1", plotOutput("plot1", height = "500px")),
-        tabPanel("Plot 2", plotOutput("plot2", height = "500px"))
+        tabPanel("Log", verbatimTextOutput("log")),
+        tabPanel("Table", DTOutput("result_table")),
+        tabPanel("Plot 1", plotOutput("plot1", height="500px")),
+        tabPanel("Plot 2", plotOutput("plot2", height="500px"))
       )
     )
   )
 )
 
+
+############################################################
+# 5. SERVER
+############################################################
+
 server <- function(input, output, session) {
+
+  output$log <- renderPrint(cat("Ready.\n"))
   
-  # Initialize environment
-  observeEvent(input$init_env, {
-    output$log <- renderPrint({
-      cat("Setting up environment...\n")
-      env_Load() # This will now execute the simplified function from A
-      cat("Environment ready.")
-    })
-  })
   
-  #### BULK RNA-SEQ MODE ####
+  ######################
+  # BULK MODE
+  ######################
   observeEvent(input$run_bulk, {
-    output$log <- renderPrint({ cat("Running bulk RNA-seq analysis...\n") })
+    output$log <- renderPrint(cat("Running bulk RNA-seq analysis... please wait.\n"))
     
-    if (isTRUE(input$use_example)) {
-      expr <- read.csv(system.file("demo", "GSE246425_counts.csv", package = "seneR"), row.names = 1)
-      meta <- read.csv(system.file("demo", "GSE246425_meta.csv", package = "seneR"), row.names = 1)
+    
+    withProgress(message = "Processing...", value = 0, {
+      
+      incProgress(0.1, detail = "Loading data...")
+    # Load data
+    if (input$use_example) {
+      expr <- read.csv(system.file("demo/GSE246425_counts.csv", package="seneR"),
+                       row.names=1, check.names=FALSE)
+      meta <- read.csv(system.file("demo/GSE246425_meta.csv", package="seneR"),
+                       row.names=1, check.names=FALSE)
+
     } else {
       req(input$expr_file, input$meta_file)
-      expr <- read.csv(input$expr_file$datapath, row.names = 1)
-      meta <- read.csv(input$meta_file$datapath, row.names = 1)
+      expr <- read.csv(input$expr_file$datapath, row.names=1, check.names=FALSE)
+      meta <- read.csv(input$meta_file$datapath, row.names=1, check.names=FALSE)
     }
-    
-    # Run senescence prediction
+
+    # Run prediction
+      incProgress(0.2, detail = "Running SID prediction...")
+ 
+      
     SID_res <- SenCID(expr)
     score_res <- SID_res$score_res
-    
-    # Plot group comparison
+  
     output$plot1 <- renderPlot({
-      plot_group(score_res, meta, "group", "SID_Score", comparisons = list(c("Old", "Young")))
+      plot_group(score_res, meta, "group", "SID_Score",
+                 comparisons=list(c("Old","Young")))
     })
-    
-    # GSVA analysis
-    gsva_res <- seneGSVA(expr)
-    
-    # Violin plot
+
+    # Safe GSVA subset
+    incProgress(0.3, detail = "Running GSVA...")
+ 
+    expr_small <- expr[1:min(200, nrow(expr)), ]
+    gsva_res <- seneGSVA(expr_small)
+
+    incProgress(0.3, detail = "Rendering plots...")
     output$plot2 <- renderPlot({
       plot_violin(gsva_res, meta, "group")
     })
-    
-    # Results table
+
     output$result_table <- renderDT({
-      datatable(score_res)
+      datatable(score_res, options=list(pageLength=20))
     })
     
-    output$log <- renderPrint({
-      cat("Bulk analysis complete.\nSID and GSVA results generated.")
-    })
+    output$log <- renderPrint(cat(
+      "Bulk RNA-seq analysis completed.\n",
+      "SID and GSVA results are ready.\n"
+    ))
   })
-  
-  #### SINGLE-CELL (SEURAT) MODE ####
+  })
+
+  ######################
+  # SEURAT MODE
+  ######################
   observeEvent(input$run_seurat, {
-    output$log <- renderPrint({ cat("Running Seurat analysis...\n") })
-    
-    if (isTRUE(input$use_pbmc)) {
-      library(SeuratData)
-      options(timeout = 600)
-      SeuratData::InstallData("pbmc3k")
-      pbmc3k <- LoadData("pbmc3k", type = "pbmc3k.final")
+    log_msg("Running Seurat analysis...\n")
+
+    if (input$use_pbmc) {
+      pbmc <- readRDS(system.file("demo/pbmc_small.rds", package="seneR"))
     } else {
       req(input$seurat_file)
-      pbmc3k <- readRDS(input$seurat_file$datapath)
+      pbmc <- readRDS(input$seurat_file$datapath)
     }
-    
-    expr_matrix <- GetAssayData(pbmc3k, layer = "counts")
-    SID_res <- SenCID(expr_matrix, binarize = TRUE)
-    pbmc3k@meta.data <- cbind(pbmc3k@meta.data, SID_res$score_res)
-    
-    # UMAP/Feature plots
+
+    expr <- GetAssayData(pbmc, layer="counts")
+
+    SID_res <- SenCID(expr, binarize=TRUE)
+    pbmc@meta.data <- cbind(pbmc@meta.data, SID_res$score_res)
+
     output$plot1 <- renderPlot({
-      VlnPlot(pbmc3k, features = "SID_Score", group.by = "seurat_annotations")
+      VlnPlot(pbmc, features="SID_Score", group.by="seurat_annotations")
     })
-    
+
     output$plot2 <- renderPlot({
-      DimPlot(pbmc3k, group.by = "RecSID")
+      DimPlot(pbmc, group.by="RecSID")
     })
-    
+
     output$result_table <- renderDT({
       datatable(SID_res$score_res)
     })
-    
-    output$log <- renderPrint({
-      cat("Seurat analysis complete.\nSID scores and plots generated.")
-    })
+
+    log_msg("Seurat analysis completed.")
   })
 }
+
+
+############################################################
+# 6. Launch App
+############################################################
 
 shinyApp(ui, server)
