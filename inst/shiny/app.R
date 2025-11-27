@@ -200,7 +200,16 @@ model_pretest = model_L.predict(x_test)
   }
 }
 
-
+Recommend_stub <- function(cpm_zcol) {
+  n <- nrow(t(cpm_zcol))
+  rn <- rownames(t(cpm_zcol))
+  data.frame(
+    RecSID   = factor(rep(NA, n)),
+    rec_SID1 = NA, rec_SID2 = NA, rec_SID3 = NA,
+    rec_SID4 = NA, rec_SID5 = NA, rec_SID6 = NA,
+    row.names = rn
+  )
+}
 
 ############################################################
 # 5. SERVER
@@ -212,7 +221,8 @@ server <- function(input, output, session) {
     load_python_models()
   }, silent = TRUE)
   
-  Pred <<- Pred_for_shiny
+  Pred <- Pred_for_shiny
+  Recommend  <- Recommend_stub
   
   output$log <- renderPrint(cat("Environment Ready.\n"))
   
@@ -278,17 +288,20 @@ server <- function(input, output, session) {
   # SEURAT MODE
   ######################
   observeEvent(input$run_seurat, {
-    log_msg("Running Seurat analysis...\n")
+    output$log <- renderPrint(cat("Running Seurat analysis...\n"))
+    
     
     if (input$use_pbmc) {
-      pbmc <- readRDS(system.file("demo/pbmc_small.rds", package="seneR"))
+      output$log <- renderPrint(cat("use_pbmc...\n"))
+      demo_path <- system.file("demo/pbmc_small.rds", package = "seneR")
+      pbmc <- readRDS(demo_path)
     } else {
       req(input$seurat_file)
       pbmc <- readRDS(input$seurat_file$datapath)
     }
     
     expr <- GetAssayData(pbmc, layer="counts")
-    rm(pbmc3k)
+    rm(pbmc)
     gc()
     
     SID_res <- SenCID(expr, binarize=TRUE)
