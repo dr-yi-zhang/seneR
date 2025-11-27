@@ -3,12 +3,25 @@
 ###############################################
 
 library(shiny)
+library(reticulate)
+
+# Python settings (must come first)
+
+py_require(
+  packages = c(
+    "numpy==1.26.4",
+    "joblib",
+    "scikit-learn==1.5.0"
+  ),
+  python_version = "3.10"
+)
+
+
 library(DT)
 library(ggplot2)
 library(Seurat)
 library(dplyr)
 library(tidyr)
-library(reticulate)
 library(seneR) 
 
 options(shiny.maxRequestSize = 150 * 1024^2)   # Safe upload limit
@@ -34,7 +47,7 @@ if (running_local) {
 if (running_local) {
   # LOCAL ONLY: Install Python dependencies if missing
   message("Setting up Python environment locally...")
-
+  
   py_require(
     packages = c(
       "scikit-learn==1.5.0",
@@ -43,7 +56,7 @@ if (running_local) {
     ),
     python_version = "3.10"
   )
-
+  
 } else {
   # DEPLOY MODE: shinyapps.io provides Python env from requirements.txt
   message("Using shinyapps.io Python environment.")
@@ -72,26 +85,25 @@ obj = joblib.load(r'%s')
 
 load_python_models <- function() {
   message("Loading Python models...")
-
+  
   base_path <- system.file("model", package = "seneR")
-
+  
   # Load SID models
   for (i in 1:6) {
     m  <- file.path(base_path, sprintf("SID%d.pkl", i))
     ml <- file.path(base_path, sprintf("SID%d_L.pkl", i))
-
+    
     py_model_env[[paste0("model",  i)]]  <- joblib_load(m)
     py_model_env[[paste0("modelL", i)]]  <- joblib_load(ml)
   }
-
+  
   # Load recommendation model
   rec_path <- file.path(base_path, "recommend_model.pkl")
   py_model_env$recommender <- joblib_load(rec_path)
-
+  
   message("Python models loaded successfully.")
 }
 
-load_python_models()
 
 
 ############################################################
@@ -113,14 +125,14 @@ GetModels <- function(sidnum) {
 ui <- fluidPage(
   
   titlePanel("seneR: Senescence Analysis Portal"),
-
+  
   sidebarLayout(
     sidebarPanel(
       selectInput("mode", "Analysis mode:",
                   c("Bulk RNA-seq", "Single-cell (Seurat)")),
-
+      
       hr(),
-
+      
       conditionalPanel(
         condition = "input.mode == 'Bulk RNA-seq'",
         fileInput("expr_file", "Upload expression matrix (CSV)", accept = ".csv"),
@@ -128,7 +140,7 @@ ui <- fluidPage(
         checkboxInput("use_example", "Use demo dataset (GSE246425)", TRUE),
         actionButton("run_bulk", "Run Bulk Analysis")
       ),
-
+      
       conditionalPanel(
         condition = "input.mode == 'Single-cell (Seurat)'",
         fileInput("seurat_file", "Upload Seurat RDS", accept = ".rds"),
@@ -136,7 +148,7 @@ ui <- fluidPage(
         actionButton("run_seurat", "Run Seurat Analysis")
       )
     ),
-
+    
     mainPanel(
       tabsetPanel(
         tabPanel("Log", verbatimTextOutput("log")),
@@ -154,8 +166,14 @@ ui <- fluidPage(
 ############################################################
 
 server <- function(input, output, session) {
-
-  output$log <- renderPrint(cat("Ready.\n"))
+  
+  try({
+    load_python_models()
+  }, silent = TRUE)
+  
+  Pred <- Pred_for_shiny
+  
+  output$log <- renderPrint(cat("Environment Ready.\n"))
   
   
   ######################
@@ -168,83 +186,85 @@ server <- function(input, output, session) {
     withProgress(message = "Processing...", value = 0, {
       
       incProgress(0.1, detail = "Loading data...")
-    # Load data
-    if (input$use_example) {
-      expr <- read.csv(system.file("demo/GSE246425_counts.csv", package="seneR"),
-                       row.names=1, check.names=FALSE)
-      meta <- read.csv(system.file("demo/GSE246425_meta.csv", package="seneR"),
-                       row.names=1, check.names=FALSE)
-
-    } else {
-      req(input$expr_file, input$meta_file)
-      expr <- read.csv(input$expr_file$datapath, row.names=1, check.names=FALSE)
-      meta <- read.csv(input$meta_file$datapath, row.names=1, check.names=FALSE)
-    }
-
-    # Run prediction
-      incProgress(0.2, detail = "Running SID prediction...")
- 
+      # Load data
+      if (input$use_example) {
+        expr <- read.csv(system.file("demo/GSE246425_counts.csv", package="seneR"),
+                         row.names=1, check.names=FALSE)
+        meta <- read.csv(system.file("demo/GSE246425_meta.csv", package="seneR"),
+                         row.names=1, check.names=FALSE)
+        
+      } else {
+        req(input$expr_file, input$meta_file)
+        expr <- read.csv(input$expr_file$datapath, row.names=1, check.names=FALSE)
+        meta <- read.csv(input$meta_file$datapath, row.names=1, check.names=FALSE)
+      }
       
-    SID_res <- SenCID(expr)
-    score_res <- SID_res$score_res
+      # Run prediction
+      incProgress(0.2, detail = "Running SID prediction...")
+      
+      
+      SID_res <- SenCID(expr)
+      score_res <- SID_res$score_res
+      
+      output$plot1 <- renderPlot({
+        plot_group(score_res, meta, "group", "SID_Score",
+                   comparisons=list(c("Old","Young")))
+      })
+      
+      # Safe GSVA subset
+      incProgress(0.3, detail = "Running GSVA...")
+      
+      expr_small <- expr[1:min(200, nrow(expr)), ]
+      gsva_res <- seneGSVA(expr_small)
+      
+      incProgress(0.3, detail = "Rendering plots...")
+      output$plot2 <- renderPlot({
+        plot_violin(gsva_res, meta, "group")
+      })
+      
+      output$result_table <- renderDT({
+        datatable(score_res, options=list(pageLength=20))
+      })
+      
+      output$log <- renderPrint(cat(
+        "Bulk RNA-seq analysis completed.\n",
+        "SID and GSVA results are ready.\n"
+      ))
+    })
+  })
   
-    output$plot1 <- renderPlot({
-      plot_group(score_res, meta, "group", "SID_Score",
-                 comparisons=list(c("Old","Young")))
-    })
-
-    # Safe GSVA subset
-    incProgress(0.3, detail = "Running GSVA...")
- 
-    expr_small <- expr[1:min(200, nrow(expr)), ]
-    gsva_res <- seneGSVA(expr_small)
-
-    incProgress(0.3, detail = "Rendering plots...")
-    output$plot2 <- renderPlot({
-      plot_violin(gsva_res, meta, "group")
-    })
-
-    output$result_table <- renderDT({
-      datatable(score_res, options=list(pageLength=20))
-    })
-    
-    output$log <- renderPrint(cat(
-      "Bulk RNA-seq analysis completed.\n",
-      "SID and GSVA results are ready.\n"
-    ))
-  })
-  })
-
   ######################
   # SEURAT MODE
   ######################
   observeEvent(input$run_seurat, {
     log_msg("Running Seurat analysis...\n")
-
+    
     if (input$use_pbmc) {
       pbmc <- readRDS(system.file("demo/pbmc_small.rds", package="seneR"))
     } else {
       req(input$seurat_file)
       pbmc <- readRDS(input$seurat_file$datapath)
     }
-
+    
     expr <- GetAssayData(pbmc, layer="counts")
-
+    rm(pbmc3k)
+    gc()
+    
     SID_res <- SenCID(expr, binarize=TRUE)
     pbmc@meta.data <- cbind(pbmc@meta.data, SID_res$score_res)
-
+    
     output$plot1 <- renderPlot({
       VlnPlot(pbmc, features="SID_Score", group.by="seurat_annotations")
     })
-
+    
     output$plot2 <- renderPlot({
       DimPlot(pbmc, group.by="RecSID")
     })
-
+    
     output$result_table <- renderDT({
       datatable(SID_res$score_res)
     })
-
+    
     log_msg("Seurat analysis completed.")
   })
 }

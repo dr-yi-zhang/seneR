@@ -1,3 +1,4 @@
+
 # seneR/R/env_Load.R
 
 #' @title Load seneR environment
@@ -15,7 +16,7 @@ env_Load <- function(local=TRUE) {
   # For deployment, this function does nothing as py_require() handles it.
   # For local use, it ensures the virtualenv is used, which is good practice.
   if(local){reticulate::virtualenv_install("seneR_env", packages = c("scikit-learn==1.5.0", "joblib",'NumPy==1.26.4'))
-    }
+  }
   if (reticulate::virtualenv_exists("seneR_env")) {
     # If the env exists locally (as defined in your Rprofile), use it.
     reticulate::use_virtualenv("seneR_env", required = TRUE)
@@ -38,28 +39,30 @@ env_Load <- function(local=TRUE) {
 #' @export
 #'
 #' @examples
-# seneR/R/SenCID.R
-
 SenCID <- function(data,sidnums=c(1,2,3,4,5,6), binarize=FALSE, denoising,threads){
   #数据预处理
   data_scaled <- scale_data(data)
   
-  # CRITICAL: Delete original, possibly large, input data
-  rm(data)
-  gc()
-  
   # 计算SID分数
   pred_list <- lapply(sidnums, function(sidnum) Pred(data_scaled, sidnum, binarize))
   
-  # CRITICAL: Delete the large scaled data matrix immediately after prediction is done
-  rm(data_scaled) 
-  gc() 
+  # 创建 SID 分数字典
+  sid_list <- paste0("SID", sidnums)
+  pred_dict <- setNames(pred_list, sid_list)
   
-  # ... (rest of SenCID is fine for memory management) ...
+  # 计算推荐 SID
+  recSID <- Recommend(data_scaled)
+  # score_SID <- names(which.max(table(recSID$RecSID)))
+  score_res <- NULL
+  for (i in 1:length(recSID$RecSID)) {
+    recScoreLine <- pred_dict[[recSID$RecSID[i]]][i,]
+    recScoreLine$RecSID <- recSID$RecSID[i]
+    score_res <- rbind(score_res,recScoreLine)
+  }
   
   cat("Finished. Giving SID scores and SID Recommendation...\n")
   
-  # 返回结果 (unchanged)
+  # 返回结果
   return(list(pred_dict = pred_dict, recSID = recSID,score_res=score_res))
 }
 
@@ -142,3 +145,57 @@ sene_heatmap <- function(CDS_obj,num = 20,num_clusters = 3, cores=3){
                           cores = cores,
                           show_rownames = T)
 }
+
+
+
+
+# Global environment to store Python models
+py_model_env <- new.env(parent = emptyenv())
+
+load_python_models <- function() {
+  
+  # Prevent repeated loading (saves memory)
+  if (!is.null(py_model_env$loaded) && py_model_env$loaded) {
+    message("Python models already loaded — skipping.")
+    return(invisible(TRUE))
+  }
+  
+  message("Loading Python models...")
+  
+  # Ensure Python available
+  if (!reticulate::py_available(initialize = TRUE)) {
+    stop("Python is not available. Please configure reticulate.")
+  }
+  
+  # Path to model folder in your package
+  base_path <- system.file("model", package = "seneR")
+  if (base_path == "") stop("Model folder not found.")
+  
+  # Helper: load .pkl file
+  joblib_load <- function(path) {
+    reticulate::py_run_string(sprintf("
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
+warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
+import joblib
+obj = joblib.load(r'%s')
+", path))
+    reticulate::py$obj
+  }
+  
+  # Load SID1–SID6 and SID1_L–SID6_L
+  for (sid in 1:6) {
+    py_model_env[[paste0("model", sid)]]  <- joblib_load(file.path(base_path, paste0("SID", sid, ".pkl")))
+    py_model_env[[paste0("modelL", sid)]] <- joblib_load(file.path(base_path, paste0("SID", sid, "_L.pkl")))
+  }
+  
+  # Load recommendation model
+  py_model_env$recommend_model <- joblib_load(file.path(base_path, "recommend_model.pkl"))
+  
+  # Mark as loaded
+  py_model_env$loaded <- TRUE
+  
+  message("Python models loaded successfully.")
+  invisible(TRUE)
+}
+
