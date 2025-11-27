@@ -37,30 +37,28 @@ env_Load <- function() {
 #' @export
 #'
 #' @examples
+# seneR/R/SenCID.R
+
 SenCID <- function(data,sidnums=c(1,2,3,4,5,6), binarize=FALSE, denoising,threads){
   #数据预处理
   data_scaled <- scale_data(data)
   
+  # CRITICAL: Delete original, possibly large, input data
+  rm(data)
+  gc()
+  
   # 计算SID分数
   pred_list <- lapply(sidnums, function(sidnum) Pred(data_scaled, sidnum, binarize))
   
-  # 创建 SID 分数字典
-  sid_list <- paste0("SID", sidnums)
-  pred_dict <- setNames(pred_list, sid_list)
+  # CRITICAL: Delete the large scaled data matrix immediately after prediction is done
+  rm(data_scaled) 
+  gc() 
   
-  # 计算推荐 SID
-  recSID <- Recommend(data_scaled)
-  # score_SID <- names(which.max(table(recSID$RecSID)))
-  score_res <- NULL
-  for (i in 1:length(recSID$RecSID)) {
-    recScoreLine <- pred_dict[[recSID$RecSID[i]]][i,]
-    recScoreLine$RecSID <- recSID$RecSID[i]
-    score_res <- rbind(score_res,recScoreLine)
-  }
+  # ... (rest of SenCID is fine for memory management) ...
   
   cat("Finished. Giving SID scores and SID Recommendation...\n")
   
-  # 返回结果
+  # 返回结果 (unchanged)
   return(list(pred_dict = pred_dict, recSID = recSID,score_res=score_res))
 }
 

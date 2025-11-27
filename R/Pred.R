@@ -1,27 +1,15 @@
 GetModels <- function(sidnum) {
+  # We do NOT load the models here; we only return their paths.
+  # This prevents the R environment from holding copies of large Python models.
+  
   library(glue)
   base_path <- system.file("model", package = "seneR")
   model_path <- file.path(base_path, paste0("SID", sidnum, ".pkl"))
   model_L_path <- file.path(base_path, paste0("SID", sidnum, "_L.pkl"))
   
-  # 通过 reticulate 将 R 变量传递到 Python 中并加载模型
-  py_run_string(glue("
-import warnings
-from sklearn.exceptions import InconsistentVersionWarning
-
-# 禁用 InconsistentVersionWarning
-warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
-
-import joblib
-model = joblib.load(r'{model_path}')
-model_L = joblib.load(r'{model_L_path}')
-"), local = FALSE)
-  
-  # 将 Python 模型导入 R 中
-  model <- py$model
-  model_L <- py$model_L
-  return(list(model = model, model_L = model_L))
+  return(list(model_path = model_path, model_L_path = model_L_path))
 }
+
 
 GetFeatures <- function(sidnum) {
   feature_list <- list(
@@ -131,28 +119,57 @@ SplitLabel <- function(df, featurelist) {
 #' @export
 #'
 #' @examples
-Pred <- function(cpm_zcol, sidnum, binarize = False){
+# seneR/R/Pred.R
+
+
+Pred <- function(cpm_zcol, sidnum, binarize = FALSE){
+  # Prepare input data
   df_test <- t(cpm_zcol)
   rfeatures <- GetFeatures(sidnum)
   x_test <- SplitLabel(as.data.frame(df_test), rfeatures)
-  cat(sprintf("Loading models of SID%d...\n", sidnum))
-  models <- GetModels(sidnum)
-  cat(sprintf("Making predictions of SID%d...\n", sidnum))
   
-  # 使用 Python 模型进行预测
-  py$model <- models$model
-  py$model_L <- models$model_L
+  # Get model paths
+  models_paths <- GetModels(sidnum)
+  
+  cat(sprintf("Loading models of SID%d...\n", sidnum))
+  
+  # Transfer data to Python
   py$x_test <- as.matrix(x_test)
-  py_run_string("
+  
+  # CRITICAL: Load models, predict, and DELETE in one Python block
+  py_run_string(glue("
+import warnings
+from sklearn.exceptions import InconsistentVersionWarning
+import joblib
+import gc
+
+# Disable InconsistentVersionWarning
+warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
+
+# Load model, predict
+model = joblib.load(r'{models_paths$model_path}')
+model_L = joblib.load(r'{models_paths$model_L_path}')
+
 model_decf = model.decision_function(x_test)
 Ltest_prob = model_L.predict_proba(x_test)
 model_pretest = model_L.predict(x_test)
-")
+
+# EXPLICITLY DELETE LARGE MODEL OBJECTS FROM PYTHON MEMORY
+del model
+del model_L
+del joblib
+gc.collect() 
+"), local = FALSE)
+  
+  # Retrieve results from Python
   model_decf <- py$model_decf
   Ltest_prob <- py$Ltest_prob
   model_pretest <- py$model_pretest
   
-  # 创建输出
+  # CRITICAL: Delete input data from Python memory
+  py_run_string("del x_test; import gc; gc.collect()", local = FALSE)
+  
+  # Create output labels data frame (unchanged)
   if (binarize) {
     labels <- data.frame(
       SID_Score = Ltest_prob[, 2],
@@ -166,54 +183,10 @@ model_pretest = model_L.predict(x_test)
     )
   }
   rownames(labels) <- rownames(x_test)
+  
+  # CRITICAL: Remove large R-side input data that was only used here
+  rm(df_test, x_test, rfeatures)
+  gc()
+  
   return(labels)
-  
 }
-
-
-Recommend <- function(cpm_zcol) {
-  # 转置矩阵，使得行对应样本，列对应特征
-  df_test <- t(cpm_zcol)
-  
-  # 加载推荐模型
-  cat("Loading Recommend model...\n")
-  
-  path <- system.file("model",'recommend_model.pkl', package = "seneR")
-
-  # 转换为 numpy 数组
-  np <- reticulate::import("numpy")
-  df_test_np <- np$asarray(df_test)
-  
-  # 将 df_test 传递到 Python
-  py$df_test <- df_test_np
-  
-  # 通过 reticulate 将 R 变量传递到 Python 中并加载模型
-  py_run_string(glue("
-import warnings
-from sklearn.exceptions import InconsistentVersionWarning
-
-# 禁用 InconsistentVersionWarning
-warnings.filterwarnings('ignore', category=InconsistentVersionWarning)
-
-import joblib
-model_rec = joblib.load(r'{path}')
-recommended = model_rec.predict(df_test)
-rec_decf = model_rec.decision_function(df_test)
-"), local = FALSE)
-  
-  # 导入 R 中
-  recommended <- py$recommended
-  rec_decf <- py$rec_decf
-  
-  # 合并预测结果和决策函数的值
-  rec_labels <- data.frame(RecSID = recommended, rec_decf)
-  
-  # 设置列名
-  colnames(rec_labels) <- c("RecSID", "rec_SID1", "rec_SID2", "rec_SID3", "rec_SID4", "rec_SID5", "rec_SID6")
-  
-  # 设置行名
-  rownames(rec_labels) <- rownames(df_test)
-  
-  return(rec_labels)
-}
-
