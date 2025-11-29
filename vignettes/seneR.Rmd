@@ -1,10 +1,6 @@
 ---
 title: "seneR Workflow"
-output:
-  rmarkdown::html_vignette
-  pdf_document:
-    toc: true
-    number_sections: true
+output:rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{seneR Workflow}
   %\VignetteEngine{knitr::rmarkdown}
