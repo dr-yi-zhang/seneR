@@ -18,16 +18,17 @@ knitr::opts_chunk$set(
 
 # Overview
 
-**seneR** is an open-source R package for assessing senescence levels from bulk and single-cell RNA-seq data.  
-It provides:
+**seneR** is an R package that provides the senescence scoring framework based on the pretrained SenCID model by Tao *et al.*. It supports both bulk RNA-seq and single-cell RNA-seq data and includes visualization and trajectory analysis tools.
 
-- Senescence scoring (SID score)  
-- Phenotype scoring via GSVA  
-- Seurat integration for scRNA-seq  
-- Trajectory inference  
-- Visualization utilities  
+**Important note for users:**  
+This vignette shows all example code **but Python-dependent steps (e.g., SenCID prediction, trajectory inference, GSVA scoring) are set to `eval=FALSE`**.  
+This is required because:
 
-seneR wraps the original **SenCID** pretrained model and reproduces its predictions in R.
+- Vignettes built by CRAN and GitHub Actions cannot install Python modules (e.g., sklearn, numpy, joblib).
+- Reticulate cannot create virtual environments during automated vignette building.
+- Therefore, Python code must not be executed during vignette building.
+
+Users running this vignette interactively can simply copy these commands into their R session (after running `env_Load()` once).
 
 ---
 
@@ -42,7 +43,7 @@ Load the package:
 
 ```{r}
 library(seneR)
-# env_Load() 
+# env_Load()  # Run this interactively, not during vignette building
 ```
 
 ---
@@ -69,15 +70,15 @@ head(example_meta)
 
 # Senescence Level (SID Score)
 
-```{r}
+```{r eval=FALSE}
 SID_res <- SenCID(example_expr)
 score_res <- SID_res$score_res
 head(score_res)
 ```
 
-## Group Comparison
+To compare groups:
 
-```{r}
+```{r eval=FALSE}
 plot_group(
   score_res,
   example_meta,
@@ -91,13 +92,13 @@ plot_group(
 
 # Senescence-related Phenotype Assessment
 
-```{r}
+```{r eval=FALSE}
 gsva_res <- seneGSVA(example_expr)
 ```
 
-## Violin Plot
+Plot phenotypes:
 
-```{r}
+```{r eval=FALSE}
 plot_violin(
   gsva_res,
   example_meta,
@@ -111,9 +112,9 @@ plot_violin(
 
 # scRNA-seq Example with Seurat
 
-## Load example Seurat object
+Load a test dataset:
 
-```{r message=FALSE, warning=FALSE}
+```{r eval=FALSE, message=FALSE, warning=FALSE}
 library(Seurat)
 library(SeuratData)
 
@@ -122,20 +123,17 @@ SeuratData::InstallData("pbmc3k")
 pbmc3k <- LoadData("pbmc3k", type = "pbmc3k.final")
 ```
 
-## Compute SID score per cell
+Compute cell-level SID scores:
 
-```{r}
+```{r eval=FALSE}
 expr_matrix <- GetAssayData(pbmc3k, layer = "counts")
 SID_res <- SenCID(expr_matrix, binarize = TRUE)
-
 pbmc3k@meta.data <- cbind(pbmc3k@meta.data, SID_res$score_res)
 ```
 
----
+Visualize:
 
-# Visualization of Senescence in scRNA-seq
-
-```{r}
+```{r eval=FALSE}
 VlnPlot(pbmc3k, features = "SID_Score", group.by = "seurat_annotations")
 DimPlot(pbmc3k)
 DimPlot(pbmc3k, group.by = "RecSID")
@@ -147,32 +145,53 @@ FeaturePlot(pbmc3k, features = "SID_Score")
 
 # Senescence Trajectory Analysis
 
-```{r message=FALSE, warning=FALSE}
+```{r eval=FALSE, message=FALSE, warning=FALSE}
 library(monocle)
 seneCDS <- sene_traject(pbmc3k, color = "SID_Score", cores = 7)
-seneCDS <- sene_traject(pbmc3k, color = "seurat_annotations", cores = 7)
 ```
 
----
+Trajectory heatmap:
 
-# Trajectory Heatmap
-
-```{r message=FALSE, warning=FALSE}
+```{r eval=FALSE}
 sene_heatmap(seneCDS, num = 20, num_clusters = 3)
 ```
 
 ---
 
+# Why Many Chunks Use `eval=FALSE`
+
+Because seneR depends on Python libraries, the following Python modules must exist for full execution:
+
+- numpy  
+- sklearn  
+- joblib  
+
+But:
+
+- **CRAN**  
+- **GitHub install_github()**  
+- **Automated checks**  
+
+do **not** allow Python installation during vignette building.
+
+Therefore, Python-dependent code **cannot run** inside the vignette, or the build will fail.
+
+Users running seneR locally can simply run all commands normally after calling:
+
+```r
+env_Load()
+```
+
+This loads the Python environment and enables full functionality.
+
+---
+
 # Feedback
 
-For questions or comments, please contact:  
+For questions or suggestions, please contact:  
 **2211563@tongji.edu.cn**
-
-# Contributing
-
-Contributions are welcome via GitHub pull requests and issues.
 
 # References
 
-Tao et al. (2024). SenCID: A predictive model for cellular senescence.
+Tao et al. (2024). SenCID: A machine learning model for cellular senescence prediction.
 
