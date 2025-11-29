@@ -1,153 +1,178 @@
 ---
-title: "seneR"
+title: "seneR Workflow"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{seneR}
+  %\VignetteIndexEntry{seneR Workflow}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
-```{r, include = FALSE}
+```{r, include=FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 4
 )
 ```
 
-## Overview
+# Overview
 
-seneR is an open-source R package for assessing the senescence level of samples based on RNA-seq counts data. Using this tool, researchers can quickly obtain quantitative assessments of senescence and senescence-related phenotypes, thereby gaining biological insights. For single-cell RNA-seq, this tool can also identify senescent and non-senescent cells, and draw senescence trajectories, which is beneficial for understanding the cell senescence process. The tool is a valuable shovel for mining biological insights of senescence from the vast repository of omics data.
+**seneR** is an open-source R package for assessing senescence levels from bulk and single-cell RNA-seq data.  
+It provides:
 
-## Installation
+- Senescence scoring (SID score)  
+- Phenotype scoring via GSVA  
+- Seurat integration for scRNA-seq  
+- Trajectory inference  
+- Visualization utilities  
 
-You can install the development version of seneR like so:
+seneR wraps the original **SenCID** pretrained model and reproduces its predictions in R.
 
-``` r
-{r,eval=FALSE}
-if (!requireNamespace("pacman", quietly = TRUE))
-    install.packages("pacman")
-library(pacman)
-pacman::p_load(GSEABase, GSVA, dplyr, tidyverse)
+---
+
+# Installation
+
+```{r eval=FALSE}
+# install.packages("devtools")
 devtools::install_github("dr-yi-zhang/seneR")
 ```
 
-## Usage
-
-### Load the seneR environment:
-
-```{r example, message=FALSE}
-library(seneR)
-env_Load() 
-```
-
-### Input RNA-seq data
-
-Read the bulk RNA-seq sample data provided by this package (raw counts & metadata):
+Load the package:
 
 ```{r}
-example_expr <- read.csv(system.file("demo", "GSE246425_counts.csv", package = "seneR"),row.names = 1)
+library(seneR)
+env_Load()
+```
+
+---
+
+# Bulk RNA-seq Example
+
+## Load example data
+
+```{r}
+example_expr <- read.csv(
+  system.file("demo", "GSE246425_counts.csv", package = "seneR"),
+  row.names = 1
+)
 example_expr[1:4,1:4]
-example_meta <- read.csv(system.file("demo", "GSE246425_meta.csv", package = "seneR"),row.names = 1)
+
+example_meta <- read.csv(
+  system.file("demo", "GSE246425_meta.csv", package = "seneR"),
+  row.names = 1
+)
 head(example_meta)
 ```
 
-The example dataset (GSE246425) is a bulk RNA-seq dataset of chondrocytes isolated and cultured from human cartilage, including young group (passage 1-3) and old group (serial passaging to passage 15-18).
+---
 
-### Senescence level (SID score) assessment:
-
-The machine learning-based prediction model can automatically identify the senescence prediction model (SID1\~6) suitable for each input sample and calculate the senescence score (SID score).[@tao2024]
+# Senescence Level (SID Score)
 
 ```{r}
 SID_res <- SenCID(example_expr)
 score_res <- SID_res$score_res
+head(score_res)
 ```
 
-Plot boxplots based on the grouping of Meta information:
+## Group Comparison
 
 ```{r}
-plot_group(score_res, example_meta, 'group','SID_Score',comparisons = list(c('Old','Young')))
+plot_group(
+  score_res,
+  example_meta,
+  group_col = "group",
+  score_col = "SID_Score",
+  comparisons = list(c("Old", "Young"))
+)
 ```
 
-From the plot, we can see that the senescence level of the old group is significantly higher than that of the young group.
+---
 
-### Senescence-related phenotype assessment:
-
-Based on the collected genes associated with various aging-related phenotypes (such as genomic instability, stem cell exhaustion, mitochondrial dysfunction, etc.), we organized them into gene sets and achieved quantitative evaluation of various aging-related phenotypes through the GSVA algorithm.
+# Senescence-related Phenotype Assessment
 
 ```{r}
 gsva_res <- seneGSVA(example_expr)
 ```
 
-Plot violin plot based on the grouping of Meta information:
+## Violin Plot
 
 ```{r}
-plot_violin(gsva_res,example_meta,'group', adjust_fdr = TRUE, p_threshold = 0.05)
+plot_violin(
+  gsva_res,
+  example_meta,
+  group_col = "group",
+  adjust_fdr = TRUE,
+  p_threshold = 0.05
+)
 ```
 
-From the figure, we can see that not all phenotypes are different between the two groups. Among them, the levels of NF-kB and SASP in the old group were significantly higher than those in the young group, which is consistent with the conclusions of previous osteoarthritis studies.
+---
 
-### For scRNA-seq data
+# scRNA-seq Example with Seurat
 
-The Seurat package is the most widely used R package for scRNA-seq analysis on R, and the following is an example of the use of seneR with a seurat object. Of course, users can also input their own seurat objects or a separate count matrix.
+## Load example Seurat object
 
 ```{r message=FALSE, warning=FALSE}
 library(Seurat)
-# Use the sample seurat object provided by SeuratData
 library(SeuratData)
+
 options(timeout = 600)
 SeuratData::InstallData("pbmc3k")
 pbmc3k <- LoadData("pbmc3k", type = "pbmc3k.final")
 ```
 
-Calculate the SID score for each cell
+## Compute SID score per cell
 
 ```{r}
-expr_matrix <- GetAssayData(pbmc3k,layer = "counts")
-SID_res <- SenCID(expr_matrix,binarize = TRUE) # "binarize" can distinguish cell senescent/non-senescent by binary classification
-pbmc3k@meta.data <- cbind(pbmc3k@meta.data,SID_res$score_res) # Add the evaluation results to the metadata
+expr_matrix <- GetAssayData(pbmc3k, layer = "counts")
+SID_res <- SenCID(expr_matrix, binarize = TRUE)
+
+pbmc3k@meta.data <- cbind(pbmc3k@meta.data, SID_res$score_res)
 ```
 
-Visualizing senescence assessment results
+---
+
+# Visualization of Senescence in scRNA-seq
 
 ```{r}
 VlnPlot(pbmc3k, features = "SID_Score", group.by = "seurat_annotations")
 DimPlot(pbmc3k)
 DimPlot(pbmc3k, group.by = "RecSID")
-DimPlot(pbmc3k, group.by = "Binarization") #Visualizing senescent/non-senescent cells. 1 for senescent and 0 for non-senescent.
+DimPlot(pbmc3k, group.by = "Binarization")
 FeaturePlot(pbmc3k, features = "SID_Score")
 ```
 
-Plotting the trajectory of senescence
+---
 
-This function draws the senescence trajectory of cells by fitting differentially expressed genes with SID score.
+# Senescence Trajectory Analysis
 
 ```{r message=FALSE, warning=FALSE}
 library(monocle)
-seneCDS <- sene_traject(pbmc3k,color = "SID_Score",cores = 7)
-seneCDS <- sene_traject(pbmc3k,color = "seurat_annotations",cores = 7) #Gain insights by observing annotated cell subpopulations on trajectories
+seneCDS <- sene_traject(pbmc3k, color = "SID_Score", cores = 7)
+seneCDS <- sene_traject(pbmc3k, color = "seurat_annotations", cores = 7)
 ```
 
-Finding genes that have a kinetic tendency associated with senescence by plotting a heat map
+---
 
-This function draws the senescence trajectory of cells by fitting differentially expressed genes with SID score.
+# Trajectory Heatmap
 
 ```{r message=FALSE, warning=FALSE}
-sene_heatmap(seneCDS, num = 20, num_clusters = 3) #Set the number of genes to be displayed and the number of clustered expression patterns
-
+sene_heatmap(seneCDS, num = 20, num_clusters = 3)
 ```
 
-```{r eval=FALSE, include=FALSE}
-genes <- c('CDKN1A','IL1B','SDHA')
-seneCDS_subset <- seneCDS[genes,]
-plot_genes_in_pseudotime(seneCDS_subset, color_by = "SID_Score")
-```
+---
 
-## Feedback
+# Feedback
 
-For questions, comments, or any other feedback, please contact the developers ([2211563\@tongji.edu.cn](mailto:2211563@tongji.edu.cn){.email}).
+For questions or comments, please contact:  
+**2211563@tongji.edu.cn**
 
-## Contributing
+# Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request on GitHub.
+Contributions are welcome via GitHub pull requests and issues.
 
-## References
+# References
+
+Tao et al. (2024). SenCID: A predictive model for cellular senescence.
+
