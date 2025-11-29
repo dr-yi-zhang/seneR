@@ -42,7 +42,7 @@ Load the package:
 
 ```{r}
 library(seneR)
-env_Load()
+# env_Load() 
 ```
 
 ---
