@@ -38,7 +38,8 @@ devtools::install_github("dr-yi-zhang/seneR")
 ``` r
 library(seneR)
 env_Load() 
-#> [1] "Environment setup relies on py_require() in app.R for remote deployment."
+#> Using virtual environment 'seneR_env' ...
+#> [1] "Local 'seneR_env' activated."
 ```
 
 ### Input RNA-seq data
@@ -293,6 +294,13 @@ Contributions are welcome! Please open an issue or submit a pull request
 on GitHub.
 
 ## References
+
+The senescence prediction model (inst/model) used in seneR is the
+pretrained SenCID model released by Tao et al. (2024). We do not modify
+or redistribute the model under a different license. The original model
+files are loaded directly from the official SenCID repository, which is
+released under the MIT License. Proper attribution to the original
+authors is provided here and in the package documentation.
 
 <div id="refs" class="references csl-bib-body hanging-indent"
 entry-spacing="0">

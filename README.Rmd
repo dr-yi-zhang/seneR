@@ -157,3 +157,5 @@ For questions, comments, or any other feedback, please contact the developers ([
 Contributions are welcome! Please open an issue or submit a pull request on GitHub.
 
 ## References
+
+The senescence prediction model (inst/model) used in seneR is the pretrained SenCID model released by Tao et al. (2024). We do not modify or redistribute the model under a different license. The original model files are loaded directly from the official SenCID repository, which is released under the MIT License. Proper attribution to the original authors is provided here and in the package documentation.
